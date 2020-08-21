@@ -11,9 +11,9 @@ class NeuralNetwork(nn.Module):
         preds = self.fc1(x)
         return preds
     
-class LinearModel(nn.Module):
+class UnivariateLinearModel(nn.Module):
     def __init__(self, D_in, H, D_out):
-        super(LinearModel, self).__init__()
+        super(UnivariateLinearModel, self).__init__()
         self.layer = nn.Sequential(
             nn.Linear(D_in, H),
             nn.ReLU(),

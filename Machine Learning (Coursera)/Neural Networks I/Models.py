@@ -7,23 +7,6 @@ from torch.optim import Optimizer
 class MnistClassifier(nn.Module):
     def __init__(self, D_in, D_out):
         super(MnistClassifier, self).__init__()
-#         self.layer = nn.Sequential(
-#             # Layer 1
-#             nn.Linear(D_in, 256),
-#             nn.ReLU(),
-#             nn.BatchNorm1d(256),
-            
-#             # Layer 2
-#             nn.Linear(256, 64),
-#             nn.ReLU(),
-#             nn.BatchNorm1d(64),
-            
-#             # Ouput
-#             nn.Linear(64, D_out),
-#             nn.ReLU(),
-#             nn.BatchNorm1d(D_out),
-#             nn.Softmax(dim=1)
-#         )
         self.layer1=nn.Sequential(
             # Layer 1
             nn.Linear(D_in, 256),
@@ -47,8 +30,6 @@ class MnistClassifier(nn.Module):
         )
         
     def forward(self, x):
-#         preds = self.layer(x)
-#         return preds
         x = self.layer1(x)
         x = self.layer2(x)
         return self.output(x)

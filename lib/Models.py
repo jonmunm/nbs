@@ -1,3 +1,4 @@
+import pickle
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -78,3 +79,11 @@ class UciAdultsClassifier(nn.Module):
                 preds = self.forward(x_continius, x_categorical)
                 predictions.append(preds)
         return torch.cat(predictions)
+    
+    def dumps(self, filename:str):
+        with open(filename, 'wb') as f:
+            return pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+
+    @staticmethod
+    def loads(obj):
+        return pickle.loads(obj)

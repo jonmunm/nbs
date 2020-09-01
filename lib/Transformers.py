@@ -1,3 +1,4 @@
+import pickle
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.preprocessing import FunctionTransformer as FT
 from sklearn.base import TransformerMixin
@@ -13,21 +14,36 @@ class NumericFeature(TransformerMixin):
     def __init__(
         self, 
         pre_tms:FunctionTransformerList=list(), 
-        imputer:None=SimpleImputer(), 
-        scaler:None=StandardScaler(), 
+        imputer:TransformerMixin=None, 
+        scaler:TransformerMixin=None, 
         post_tms:FunctionTransformerList=list()
     ):
         self.pre_tms = pre_tms
-        self.imputer = imputer
-        self.scaler = scaler
+        
+        if imputer != False:
+            if imputer is None:
+                self.imputer = SimpleImputer()
+            else:
+                self.imputer = imputer
+        else:
+            self.imputer = None
+            
+        if scaler != False:
+            if scaler is None:
+                self.scaler = StandardScaler()
+            else:
+                self.scaler = scaler
+        else:
+            self.scaler = None
+            
         self.post_tms = post_tms
         
     def fit_transform(self, data:list) -> np.ndarray:        
         for tms in self.pre_tms:
             data = tms.transform(data)
         
-        data = self.imputer.fit_transform(np.array(data).reshape(-1,1)).squeeze() if self.imputer != False else data
-        data = self.scaler.fit_transform(np.array(data).reshape(-1,1)).squeeze() if self.scaler != False else data
+        data = self.imputer.fit_transform(np.array(data).reshape(-1,1)).squeeze() if self.imputer is not None else data
+        data = self.scaler.fit_transform(np.array(data).reshape(-1,1)).squeeze() if self.scaler is not None else data
         
         for tms in self.post_tms:
             data = tms.transform(data)
@@ -38,8 +54,8 @@ class NumericFeature(TransformerMixin):
         for tms in self.pre_tms:
             data = tms.transform(data)
             
-        data = self.imputer.transform(np.array(data).reshape(-1,1)).squeeze() if self.imputer != False else data
-        data = self.scaler.transform(np.array(data).reshape(-1,1)).squeeze() if self.scaler != False else data
+        data = self.imputer.transform(np.array(data).reshape(-1,1)).squeeze() if self.imputer is not None else data
+        data = self.scaler.transform(np.array(data).reshape(-1,1)).squeeze() if self.scaler is not None else data
         
         for tms in self.post_tms:
             data = tms.transform(data)        
@@ -50,18 +66,26 @@ class CategoricalFeature(TransformerMixin):
     def __init__(
         self, 
         pre_tms:FunctionTransformerList=list(),
-        encoder:None=LabelEncoder(),
+        encoder:TransformerMixin=None,
         post_tms:FunctionTransformerList=list(),
     ):
         self.pre_tms = pre_tms
-        self.encoder = encoder
+
+        if encoder != False:
+            if encoder is None:
+                self.encoder = LabelEncoder()
+            else:
+                self.encoder = encoder
+        else:
+            self.encoder = None
+            
         self.post_tms = post_tms
         
     def fit_transform(self, data:list) -> np.ndarray:      
         for tms in self.pre_tms:
             data = tms.transform(data)
-            
-        data = self.encoder.fit_transform(data) if self.encoder != False else data
+        
+        data = self.encoder.fit_transform(data) if self.encoder is not None else data
         
         for tms in self.post_tms:
             data = tms.transform(data)     
@@ -72,7 +96,13 @@ class CategoricalFeature(TransformerMixin):
         for tms in self.pre_tms:
             data = tms.transform(data)
             
-        data = self.encoder.transform(data) if self.encoder != False else data
+        if self.encoder is not None:
+            unique_values = np.unique(data)
+            for value in unique_values:
+                if value not in self.encoder.classes_:
+                    self.encoder.classes_ = np.append(self.encoder.classes_, value)
+            
+            data = self.encoder.transform(data)
         
         for tms in self.post_tms:
             data = tms.transform(data)     
@@ -159,3 +189,18 @@ class DatasetTransformer():
             the_target[:,0] = target_transformed
 
         return numerical_features, categorical_features, the_target if self.target_tms is not None else None 
+    
+    def get_feature_transformation(self, feature:str) -> TrasformationItem:
+        for feature_name, feature_tms in self.features_tms:
+            if feature_name == feature:
+                return feature_tms
+            
+        raise KeyError(f"Feature {feature} doesn't exist")
+        
+    def dumps(self, filename:str):
+        with open(filename, 'wb') as f:
+            return pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+
+    @staticmethod
+    def loads(obj):
+        return pickle.loads(obj)

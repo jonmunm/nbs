@@ -34,7 +34,7 @@ class NumericalTransformer(TransformerMixin):
             
         self.post_tms = post_tms
         
-    def fit_transform(self, data:list) -> np.ndarray:        
+    def fit_transform(self, data:np.ndarray) -> np.ndarray:        
         for tms in self.pre_tms:
             data = tms.transform(data)
         
@@ -46,7 +46,7 @@ class NumericalTransformer(TransformerMixin):
             
         return data
     
-    def transform(self, data:list) -> np.ndarray:       
+    def transform(self, data:np.ndarray) -> np.ndarray:       
         for tms in self.pre_tms:
             data = tms.transform(data)
             
@@ -64,8 +64,10 @@ class CategoricalTransformer(TransformerMixin):
         pre_tms:FunctionTransformerList=list(),
         encoder:TransformerMixin=None,
         post_tms:FunctionTransformerList=list(),
+        force_casting:bool=False
     ):
         self.pre_tms = pre_tms
+        self.force_casting = force_casting
 
         if encoder != False:
             if encoder is None:
@@ -77,7 +79,10 @@ class CategoricalTransformer(TransformerMixin):
             
         self.post_tms = post_tms
         
-    def fit_transform(self, data:list) -> np.ndarray:      
+    def fit_transform(self, data:np.ndarray) -> np.ndarray: 
+        if self.force_casting:
+            data = np.array([str(item) for item in data], dtype=object)
+            
         for tms in self.pre_tms:
             data = tms.transform(data)
         
@@ -88,15 +93,17 @@ class CategoricalTransformer(TransformerMixin):
             
         return data
     
-    def transform(self, data:list) -> np.ndarray:      
+    def transform(self, data:np.ndarray) -> np.ndarray:
+        if self.force_casting:
+            data = np.array([str(item) for item in data], dtype=object)
+        
         for tms in self.pre_tms:
             data = tms.transform(data)
             
         if self.encoder is not None:
             unique_values = np.unique(data)
-            for value in unique_values:
-                if value not in self.encoder.classes_:
-                    self.encoder.classes_ = np.append(self.encoder.classes_, value)
+            diff = np.setdiff1d(unique_values, self.encoder.classes_, True)
+            self.encoder.classes_ = np.append(self.encoder.classes_, diff)
             
             data = self.encoder.transform(data)
         
@@ -106,7 +113,7 @@ class CategoricalTransformer(TransformerMixin):
         return data 
 
 class DatasetTransformer():
-    def __init__(self, features_tms:TransformationList=list(), target_tms:TrasformationItem=tuple()):
+    def __init__(self, features_tms:TransformationList, target_tms:TrasformationItem=None):
         self.features_tms = features_tms
         self.numerical_features_names = []
         self.categorical_features_names = []
@@ -120,7 +127,7 @@ class DatasetTransformer():
             if isinstance(tms, NumericalTransformer):
                 self.numerical_features_names.append(feature)
                 
-        if len(target_tms) > 0:
+        if target_tms is not None:
             target_name, _ = target_tms
             self.target_tms = target_tms
             self.target_name = target_name
@@ -179,7 +186,7 @@ class DatasetTransformer():
                 numerical_features[:,numerical_index] = feature_transformed
                 numerical_index = numerical_index+1
                    
-        if self.target_tms is not None:
+        if target is not None:
             _, tms = self.target_tms
             target_transformed = tms.transform(target.squeeze())
             the_target[:,0] = target_transformed

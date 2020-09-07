@@ -4,56 +4,56 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
+from torch import tensor, Tensor
     
-class UciAdultsClassifier(nn.Module):
-    def __init__(self, q_continius_features:int, q_categorical_features:int, embedding_dims:list):
-        super(UciAdultsClassifier, self).__init__()
+class FullyConnectedNetworkRegressor(nn.Module):
+    def __init__(self, q_numerical_features:int, q_categorical_features:int, hidden_layers_size:list, embedding_dims:list=None):
+        super(FullyConnectedNetworkRegressor, self).__init__()
         
-        embedding_sizes = sum([embedding_size for _, embedding_size in embedding_dims])
+        self.hidden_layers_size = hidden_layers_size
         
-        self.embeddings_layer=nn.ModuleList(
-            [nn.Embedding(vocabulary_size, embedding_size) for vocabulary_size, embedding_size in embedding_dims]
-        )
+        if embedding_dims is not None:
+            embedding_sizes = sum([embedding_size for _, embedding_size in embedding_dims])
+            self.embeddings_layer=nn.ModuleList(
+                [nn.Embedding(vocabulary_size, embedding_size) for vocabulary_size, embedding_size in embedding_dims]
+            )
+            self.embedding_dropout = nn.Dropout(0.6)
+        else:
+            embedding_sizes = 0
+            self.embeddings_layer = None
         
-        self.embedding_dropout = nn.Dropout(0.6)
-        
-        self.layer1=nn.Sequential(
-            nn.Linear(embedding_sizes + q_continius_features, 128),
-            nn.ReLU(),
-            nn.BatchNorm1d(128),            
-        )
-    
-        self.layer2=nn.Sequential(
-            nn.Linear(128, 64),
+        self.layer_0 = nn.Sequential(
+            nn.Linear(embedding_sizes + q_numerical_features, hidden_layers_size[0]),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.BatchNorm1d(64),            
-        )
+            nn.BatchNorm1d(hidden_layers_size[0]),            
+        ) 
         
-        self.layer3=nn.Sequential(
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.BatchNorm1d(32),            
-        )
+        for i, hidden_size in enumerate(hidden_layers_size[1:]):
+            layer = nn.Sequential(
+                nn.Linear(hidden_layers_size[i], hidden_layers_size[i+1]),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.BatchNorm1d(hidden_layers_size[i+1]),            
+            )
+            setattr(self, f'layer_{i+1}', layer)
         
-        self.output=nn.Sequential(
-            nn.Linear(32, 1),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.BatchNorm1d(1),
+        self.output = nn.Sequential(
+            nn.Linear(hidden_layers_size[-1], 1),
             nn.Sigmoid()
         )
         
-    def forward(self, continius_features, categorical_features):
-        embeds = [emb_layer(categorical_features[:, i]) for i, emb_layer in enumerate(self.embeddings_layer)] 
-        embeds = torch.cat(embeds, 1)
+    def forward(self, numerical_features:Tensor, categorical_features:Tensor) -> Tensor:
+        if self.embeddings_layer is not None:
+            embeds = [emb_layer(categorical_features[:, i]) for i, emb_layer in enumerate(self.embeddings_layer)] 
+            embeds = torch.cat(embeds, 1)
+            x = self.embedding_dropout(embeds)
+        else:
+            embeds = tensor([])
         
-        x = self.embedding_dropout(embeds)
-        x = torch.cat([embeds, continius_features], 1)
-        x = self.layer1(torch.cat([embeds, continius_features], 1))
-        x = self.layer2(x)
-        x = self.layer3(x)
+        x = self.layer_0(torch.cat([embeds, numerical_features], 1))
+        for i in range(1, self.hidden_layers_size):
+            x = getattr(self, f'layer_{i}')(x)
         
         return self.output(x)
     
@@ -61,8 +61,8 @@ class UciAdultsClassifier(nn.Module):
         self.train()
         losses = []
         for i in range(epochs):
-            for x_continius, x_categorical, y in train_dl:
-                y_pred = self.forward(x_continius, x_categorical)
+            for x_numerical, x_categorical, y in train_dl:
+                y_pred = self.forward(x_numerical, x_categorical)
                 loss = loss_fn(y_pred, y)
                 losses.append(loss.item())
 
@@ -71,12 +71,12 @@ class UciAdultsClassifier(nn.Module):
                 opt.zero_grad()
         return losses
     
-    def predict(self, data_loader:DataLoader) -> torch.Tensor:
+    def predict(self, data_loader:DataLoader) -> Tensor:
         self.eval()
         predictions = []
         with torch.no_grad():
-            for x_continius, x_categorical, y in data_loader:
-                preds = self.forward(x_continius, x_categorical)
+            for x_numerical, x_categorical, y in data_loader:
+                preds = self.forward(x_numerical, x_categorical)
                 predictions.append(preds)
         return torch.cat(predictions)
     

@@ -52,12 +52,12 @@ class FullyConnectedNetworkRegressor(nn.Module):
             embeds = tensor([])
         
         x = self.layer_0(torch.cat([embeds, numerical_features], 1))
-        for i in range(1, self.hidden_layers_size):
+        for i in range(1, len(self.hidden_layers_size)):
             x = getattr(self, f'layer_{i}')(x)
         
         return self.output(x)
     
-    def fit(self, train_dl:DataLoader, epochs:int, opt:Optimizer, loss_fn:any) -> list:
+    def fit(self, train_dl:DataLoader, epochs:int, opt:Optimizer, scheduler:any, loss_fn:any) -> list:
         self.train()
         losses = []
         for i in range(epochs):
@@ -69,6 +69,8 @@ class FullyConnectedNetworkRegressor(nn.Module):
                 loss.backward()
                 opt.step()
                 opt.zero_grad()
+                
+                scheduler.step()
         return losses
     
     def predict(self, data_loader:DataLoader) -> Tensor:

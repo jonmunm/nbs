@@ -12,8 +12,8 @@ class TabularDataset(Dataset):
         return len(self.numerical_features)
 
     def __getitem__(self, idx):
-        sample = self.numerical_features[idx], self.categorical_features[idx], self.y[idx] if self.y is not None else None
+        sample = self.numerical_features[idx], self.categorical_features[idx], self.y[idx] if self.y is not None else np.nan
         return sample
     
     def reverse_transform(self):
-        return self.numerical_features.numpy(), self.categorical_features.numpy(), self.y.numpy() if self.y is not None else None
+        return self.numerical_features.numpy(), self.categorical_features.numpy(), self.y.numpy() if self.y is not None else np.nan

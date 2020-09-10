@@ -147,6 +147,8 @@ class DatasetTransformer():
         
         for i, feature_tms in enumerate(self.features_tms):
             feature, tms = feature_tms
+            print(feature)
+            
             feature_transformed = tms.fit_transform(features[:,i].squeeze())
             
             if isinstance(tms, CategoricalTransformer):

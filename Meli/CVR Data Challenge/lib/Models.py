@@ -6,9 +6,9 @@ from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 from torch import tensor, Tensor
     
-class FullyConnectedNetworkRegressor(nn.Module):
+class FullyConnectedNetworkClassifier(nn.Module):
     def __init__(self, q_numerical_features:int, q_categorical_features:int, hidden_layers_size:list, embedding_dims:list=None):
-        super(FullyConnectedNetworkRegressor, self).__init__()
+        super(FullyConnectedNetworkClassifier, self).__init__()
         
         self.hidden_layers_size = hidden_layers_size
         

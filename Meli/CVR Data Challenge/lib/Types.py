@@ -5,7 +5,4 @@ from typing import List, Dict, Tuple
 TrasformationItem = Tuple[str, TransformerMixin]
 TransformationList = List[TrasformationItem]
 FunctionTransformerList = List[FT]
-
-#TrasformationItem
-#TransformationList
-#FunctionTransformerList
+StringList = List[str]

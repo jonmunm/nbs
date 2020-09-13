@@ -1,19 +1,14 @@
 import pickle
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer as FT
 from sklearn.base import TransformerMixin
 from sklearn.impute import SimpleImputer
-from typing import List, Dict, Tuple
-from .Types import *
+from typing import List, Dict, Tuple, Union
 import numpy as np
 
 class NumericalTransformer(TransformerMixin):
-    def __init__(
-        self, 
-        pre_tms:FunctionTransformerList=list(), 
-        imputer:TransformerMixin=None, 
-        scaler:TransformerMixin=None, 
-        post_tms:FunctionTransformerList=list()
-    ):
+    def __init__(self, feature:str, pre_tms:List[FT]=list(), imputer:TransformerMixin=None, scaler:TransformerMixin=None, post_tms:List[FT]=list()):
+        self.feature = feature
         self.pre_tms = pre_tms
         
         if imputer != False:
@@ -61,13 +56,13 @@ class NumericalTransformer(TransformerMixin):
 class CategoricalTransformer(TransformerMixin):
     def __init__(
         self, 
-        pre_tms:FunctionTransformerList=list(),
-        encoder:TransformerMixin=None,
-        post_tms:FunctionTransformerList=list(),
-        force_casting:bool=False
+        feature:str, 
+        pre_tms:List[FT]=list(), 
+        encoder:TransformerMixin=None, 
+        post_tms:List[FT]=list()
     ):
+        self.feature = feature
         self.pre_tms = pre_tms
-        self.force_casting = force_casting
 
         if encoder != False:
             if encoder is None:
@@ -79,10 +74,10 @@ class CategoricalTransformer(TransformerMixin):
             
         self.post_tms = post_tms
         
-    def fit_transform(self, data:np.ndarray) -> np.ndarray: 
-        if self.force_casting:
-            data = np.array([str(item) for item in data], dtype=object)
-            
+    def fit_transform(self, data:np.ndarray) -> np.ndarray:
+        data = data.astype(np.str)
+        data = np.array([item.strip() for item in data], dtype=np.str)
+        
         for tms in self.pre_tms:
             data = tms.transform(data)
         
@@ -93,27 +88,75 @@ class CategoricalTransformer(TransformerMixin):
             
         return data
     
-    def transform(self, data:np.ndarray) -> np.ndarray:
-        if self.force_casting:
-            data = np.array([str(item) for item in data], dtype=object)
-        
+    def transform(self, data:np.ndarray) -> np.ndarray:        
         for tms in self.pre_tms:
             data = tms.transform(data)
             
         if self.encoder is not None:
             unique_values = np.unique(data)
+            print(f'unique_values: {len(unique_values)}')
             diff = np.setdiff1d(unique_values, self.encoder.classes_, True)
             self.encoder.classes_ = np.append(self.encoder.classes_, diff)
             
             data = self.encoder.transform(data)
+            print(f'diff: {len(diff)}')
+            print(f'self.encoder.classes_: {len(self.encoder.classes_)}')
         
         for tms in self.post_tms:
             data = tms.transform(data)     
             
-        return data 
+        return data
+    
+class CategoricalFeatureExtractor:
+    def __init__(self, features:List[str], tms_fn:callable, encoder:TransformerMixin=None):
+        self.features = features
+        self.tms_fn = tms_fn
+        
+        if encoder != False:
+            if encoder is None:
+                self.encoder = LabelEncoder()
+            else:
+                self.encoder = encoder
+        else:
+            self.encoder = None
+        
+    def fit_transform(self, data:Dict[str, str]) -> np.ndarray:
+        data = [item.strip() if item.strip() != '' else 'N/A' for item in data] 
+        data = self.tms_fn(np.array(data, dtype=object))
+        return self.encoder.fit_transform(data)
+    
+    def transform(self, data:Dict[str, str]) -> np.ndarray:
+        data = [item.strip() if item.strip() != '' else 'N/A' for item in data] 
+        data = self.tms_fn(np.array(data, dtype=object))
+        
+        unique_values = np.unique(data)
+        diff = np.setdiff1d(unique_values, self.encoder.classes_, True)
+        self.encoder.classes_ = np.append(self.encoder.classes_, diff)     
+        
+        return self.encoder.transform(data)
+    
+class CategoricalTargetTransformer(TransformerMixin):
+    def __init__(self, target:str):
+        self.target = target
+        self.encoder = LabelEncoder()
+        
+    def fit_transform(self, data:Union[List[bool], List[str]]) -> np.ndarray:
+        data = np.array(data, dtype=np.str)
+        data = np.array([item.strip() for item in data], dtype=np.str)
+        return self.encoder.fit_transform(data).reshape(-1,1)
+    
+    def transform(self, data:Union[List[bool], List[str]]) -> np.ndarray:        
+        data = np.array(data, dtype=np.str)
+        data = np.array([item.strip() for item in data], dtype=np.str)
+            
+        unique_values = np.unique(data)
+        diff = np.setdiff1d(unique_values, self.encoder.classes_, True)
+        self.encoder.classes_ = np.append(self.encoder.classes_, diff)     
+            
+        return self.encoder.transform(data).reshape(-1,1)
 
 class DatasetTransformer():
-    def __init__(self, features_tms:TransformationList, target_tms:TrasformationItem=None):
+    def __init__(self, features_tms:List[Tuple[str, TransformerMixin]]):
         self.features_tms = features_tms
         self.numerical_features_names = []
         self.categorical_features_names = []
@@ -126,79 +169,63 @@ class DatasetTransformer():
                 
             if isinstance(tms, NumericalTransformer):
                 self.numerical_features_names.append(feature)
-                
-        if target_tms is not None:
-            target_name, _ = target_tms
-            self.target_tms = target_tms
-            self.target_name = target_name
-        else:
-            self.target_tms = None
-            self.target_name = None
 
-    def fit_transform(self, features:np.ndarray, target:np.ndarray=None):      
+    def fit_transform(self, features:Dict[str, any]) -> np.ndarray:      
         dataset_len = len(features)
         
         numerical_features = np.zeros((dataset_len, len(self.numerical_features_names)), dtype=np.float64)
         categorical_features = np.zeros((dataset_len, len(self.categorical_features_names)), dtype=np.int64)
-        the_target = np.zeros((dataset_len, 1), dtype=np.int64)
         
         numerical_index = 0
         categorical_index = 0
         
         for i, feature_tms in enumerate(self.features_tms):
             feature, tms = feature_tms
+            _features = tms.feature
+            
+            if isinstance(tms, CategoricalTransformer):
+                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.str)              
+                categorical_features[:,categorical_index] = tms.fit_transform(data)
+                categorical_index = categorical_index+1
+                
+            if isinstance(tms, NumericalTransformer):
+                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.float64)                
+                numerical_features[:,numerical_index] = tms.fit_transform(data)
+                numerical_index = numerical_index+1
+
+        return numerical_features, categorical_features
+    
+    def transform(self, features:Dict[str, any]) -> np.ndarray:
+        dataset_len = len(features)
+        
+        numerical_features = np.zeros((dataset_len, len(self.numerical_features_names)), dtype=np.float64)
+        categorical_features = np.zeros((dataset_len, len(self.categorical_features_names)), dtype=np.int64)
+        
+        numerical_index = 0
+        categorical_index = 0
+        
+        for i, feature_tms in enumerate(self.features_tms):
+            feature, tms = feature_tms
+            _features = tms.feature
+            
             print(feature)
             
-            feature_transformed = tms.fit_transform(features[:,i].squeeze())
-            
             if isinstance(tms, CategoricalTransformer):
-                categorical_features[:,categorical_index] = feature_transformed
+                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.str) 
+                categorical_features[:,categorical_index] = tms.transform(data)
                 categorical_index = categorical_index+1
                 
             if isinstance(tms, NumericalTransformer):
-                numerical_features[:,numerical_index] = feature_transformed
+                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.float64) 
+                numerical_features[:,numerical_index] = tms.transform(data)
                 numerical_index = numerical_index+1
-                   
-        if self.target_tms is not None:
-            _, tms = self.target_tms
-            target_transformed = tms.fit_transform(target.squeeze())
-            the_target[:,0] = target_transformed
 
-        return numerical_features, categorical_features, the_target if self.target_tms is not None else None 
+        return numerical_features, categorical_features
     
-    def transform(self, features:np.ndarray, target:np.ndarray=None):
-        dataset_len = len(features)
-        
-        numerical_features = np.zeros((dataset_len, len(self.numerical_features_names)), dtype=np.float64)
-        categorical_features = np.zeros((dataset_len, len(self.categorical_features_names)), dtype=np.int64)
-        the_target = np.zeros((dataset_len, 1), dtype=np.int64)
-        
-        numerical_index = 0
-        categorical_index = 0
-        
-        for i, feature_tms in enumerate(self.features_tms):
-            feature, tms = feature_tms
-            feature_transformed = tms.transform(features[:,i].squeeze())
-            
-            if isinstance(tms, CategoricalTransformer):
-                categorical_features[:,categorical_index] = feature_transformed
-                categorical_index = categorical_index+1
-                
-            if isinstance(tms, NumericalTransformer):
-                numerical_features[:,numerical_index] = feature_transformed
-                numerical_index = numerical_index+1
-                   
-        if target is not None:
-            _, tms = self.target_tms
-            target_transformed = tms.transform(target.squeeze())
-            the_target[:,0] = target_transformed
-
-        return numerical_features, categorical_features, the_target if self.target_tms is not None else None 
-    
-    def get_feature_transformation(self, feature:str) -> TrasformationItem:
+    def get_feature(self, feature:str) -> Tuple[str, TransformerMixin]:
         for feature_name, feature_tms in self.features_tms:
             if feature_name == feature:
-                return feature_tms
+                return feature_name, feature_tms
             
         raise KeyError(f"Feature {feature} doesn't exist")
         
@@ -209,3 +236,9 @@ class DatasetTransformer():
     @staticmethod
     def loads(obj):
         return pickle.loads(obj)
+    
+    def __get_features(self, features:Dict[str, str], keys:Union[str, List[str]], primitive_fill_missing:str=np.nan) -> np.ndarray:
+        if isinstance(keys, str):
+            data = list(map(lambda record: record[keys], features))
+            data = [item.strip() if item.strip() != '' else primitive_fill_missing for item in data]
+            return np.array(data, dtype=object)

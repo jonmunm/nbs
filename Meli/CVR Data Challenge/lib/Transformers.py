@@ -75,32 +75,29 @@ class CategoricalTransformer(TransformerMixin):
         self.post_tms = post_tms
         
     def fit_transform(self, data:np.ndarray) -> np.ndarray:
-        data = data.astype(np.str)
-        data = np.array([item.strip() for item in data], dtype=np.str)
+        data = np.array([str(item).strip() for item in data], dtype=object)
         
         for tms in self.pre_tms:
-            data = tms.transform(data)
+            data = tms.transform(data).astype(np.str)
         
-        data = self.encoder.fit_transform(data) if self.encoder is not None else data
+        self.encoder.fit(np.append(data, ['UNKNOWN']))
+        data = self.encoder.transform(data) if self.encoder is not None else data
         
         for tms in self.post_tms:
             data = tms.transform(data)     
             
         return data
     
-    def transform(self, data:np.ndarray) -> np.ndarray:        
+    def transform(self, data:np.ndarray) -> np.ndarray:      
+        data = np.array([str(item).strip() for item in data], dtype=object)
+        
         for tms in self.pre_tms:
-            data = tms.transform(data)
+            data = tms.transform(data).astype(np.str)
+            
+        data = np.array([item if item in self.encoder.classes_ else 'UNKNOWN' for item in data], dtype=object)
             
         if self.encoder is not None:
-            unique_values = np.unique(data)
-            print(f'unique_values: {len(unique_values)}')
-            diff = np.setdiff1d(unique_values, self.encoder.classes_, True)
-            self.encoder.classes_ = np.append(self.encoder.classes_, diff)
-            
             data = self.encoder.transform(data)
-            print(f'diff: {len(diff)}')
-            print(f'self.encoder.classes_: {len(self.encoder.classes_)}')
         
         for tms in self.post_tms:
             data = tms.transform(data)     
@@ -141,84 +138,79 @@ class CategoricalTargetTransformer(TransformerMixin):
         self.encoder = LabelEncoder()
         
     def fit_transform(self, data:Union[List[bool], List[str]]) -> np.ndarray:
-        data = np.array(data, dtype=np.str)
-        data = np.array([item.strip() for item in data], dtype=np.str)
+        data = np.array([str(item).strip() for item in data], dtype=object)
         return self.encoder.fit_transform(data).reshape(-1,1)
     
     def transform(self, data:Union[List[bool], List[str]]) -> np.ndarray:        
-        data = np.array(data, dtype=np.str)
-        data = np.array([item.strip() for item in data], dtype=np.str)
-            
-        unique_values = np.unique(data)
-        diff = np.setdiff1d(unique_values, self.encoder.classes_, True)
-        self.encoder.classes_ = np.append(self.encoder.classes_, diff)     
-            
+        data = np.array([str(item).strip() for item in data], dtype=object)  
         return self.encoder.transform(data).reshape(-1,1)
 
 class DatasetTransformer():
     def __init__(self, features_tms:List[Tuple[str, TransformerMixin]]):
-        self.features_tms = features_tms
-        self.numerical_features_names = []
-        self.categorical_features_names = []
+        #self.features_tms = features_tms
+        self.numerical_features = []
+        self.categorical_features = []
         
-        for i, feature_tms in enumerate(self.features_tms):
+        for feature_tms in features_tms:
             feature, tms = feature_tms
 
             if isinstance(tms, CategoricalTransformer):
-                self.categorical_features_names.append(feature)
+                self.categorical_features.append(feature_tms)
                 
             if isinstance(tms, NumericalTransformer):
-                self.numerical_features_names.append(feature)
+                self.numerical_features.append(feature_tms)
 
-    def fit_transform(self, features:Dict[str, any]) -> np.ndarray:      
+    def fit_transform(self, features:List[Dict[str, any]]) -> np.ndarray:      
         dataset_len = len(features)
         
-        numerical_features = np.zeros((dataset_len, len(self.numerical_features_names)), dtype=np.float64)
-        categorical_features = np.zeros((dataset_len, len(self.categorical_features_names)), dtype=np.int64)
+        numerical_features = np.zeros((dataset_len, len(self.numerical_features)), dtype=np.float64)
+        categorical_features = np.zeros((dataset_len, len(self.categorical_features)), dtype=np.int64)
         
         numerical_index = 0
         categorical_index = 0
         
-        for i, feature_tms in enumerate(self.features_tms):
+        for feature_tms in self.categorical_features:
             feature, tms = feature_tms
             _features = tms.feature
+            data = np.array([record[_features] for record in features]) 
             
-            if isinstance(tms, CategoricalTransformer):
-                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.str)              
-                categorical_features[:,categorical_index] = tms.fit_transform(data)
-                categorical_index = categorical_index+1
+            categorical_features[:,categorical_index] = tms.fit_transform(data)
+            categorical_index += 1
                 
-            if isinstance(tms, NumericalTransformer):
-                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.float64)                
-                numerical_features[:,numerical_index] = tms.fit_transform(data)
-                numerical_index = numerical_index+1
-
+        for feature_tms in self.numerical_features:
+            feature, tms = feature_tms
+            _features = tms.feature
+            data = np.array([record[_features] for record in features]) 
+            
+            numerical_features[:,numerical_index] = tms.fit_transform(data)
+            numerical_index += 1
+                
         return numerical_features, categorical_features
     
-    def transform(self, features:Dict[str, any]) -> np.ndarray:
+    def transform(self, features:List[Dict[str, any]]) -> np.ndarray:
         dataset_len = len(features)
         
-        numerical_features = np.zeros((dataset_len, len(self.numerical_features_names)), dtype=np.float64)
-        categorical_features = np.zeros((dataset_len, len(self.categorical_features_names)), dtype=np.int64)
+        numerical_features = np.zeros((dataset_len, len(self.numerical_features)), dtype=np.float64)
+        categorical_features = np.zeros((dataset_len, len(self.categorical_features)), dtype=np.int64)
         
         numerical_index = 0
         categorical_index = 0
         
-        for i, feature_tms in enumerate(self.features_tms):
+        for feature_tms in self.categorical_features:
             feature, tms = feature_tms
             _features = tms.feature
+            data = np.array([record[_features] for record in features]) 
             
-            print(feature)
-            
-            if isinstance(tms, CategoricalTransformer):
-                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.str) 
-                categorical_features[:,categorical_index] = tms.transform(data)
-                categorical_index = categorical_index+1
+            categorical_features[:,categorical_index] = tms.transform(data)
+            categorical_index += 1
                 
-            if isinstance(tms, NumericalTransformer):
-                data = np.array(list(map(lambda record: record[_features], features)), dtype=np.float64) 
-                numerical_features[:,numerical_index] = tms.transform(data)
-                numerical_index = numerical_index+1
+        for feature_tms in self.numerical_features:
+            feature, tms = feature_tms
+            _features = tms.feature
+            data = np.array([record[_features] for record in features]) 
+            
+            numerical_features[:,numerical_index] = tms.transform(data)
+            numerical_index += 1
 
         return numerical_features, categorical_features
     
@@ -228,6 +220,21 @@ class DatasetTransformer():
                 return feature_name, feature_tms
             
         raise KeyError(f"Feature {feature} doesn't exist")
+        
+    def get_embeddings_size(self, embedding_max_size:int=50) -> list:
+        embedding_dims = []
+        for feature_tms in self.categorical_features:
+            _, tms = feature_tms
+
+            q_unique_values = len(tms.encoder.classes_)
+            embedding_size = min(q_unique_values//2, embedding_max_size)
+            mapping = (q_unique_values, embedding_size)
+            embedding_dims.append(mapping)
+            
+        return embedding_dims
+    
+    def get_features_quantity(self) -> tuple:
+        return len(self.numerical_features), len(self.categorical_features)
         
     def dumps(self, filename:str):
         with open(filename, 'wb') as f:

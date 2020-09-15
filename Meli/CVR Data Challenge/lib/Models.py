@@ -44,7 +44,11 @@ class FullyConnectedNetworkClassifier(nn.Module):
         )
         
     def forward(self, numerical_features:Tensor, categorical_features:Tensor) -> Tensor:
+        #print(f'categorical_features: {categorical_features.shape}')
+        #print(f'self.embeddings_layers: {len(self.embeddings_layer)}')
         if self.embeddings_layer is not None:
+            #print(f'categorical_features: {categorical_features.shape}')
+            #print(f'categorical_features[:, i]: {categorical_features[:, 1]}')
             embeds = [emb_layer(categorical_features[:, i]) for i, emb_layer in enumerate(self.embeddings_layer)] 
             embeds = torch.cat(embeds, 1)
             x = self.embedding_dropout(embeds)

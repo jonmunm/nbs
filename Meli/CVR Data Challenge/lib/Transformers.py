@@ -147,12 +147,11 @@ class CategoricalTargetTransformer(TransformerMixin):
 
 class DatasetTransformer():
     def __init__(self, features_tms:List[Tuple[str, TransformerMixin]]):
-        #self.features_tms = features_tms
         self.numerical_features = []
         self.categorical_features = []
         
         for feature_tms in features_tms:
-            feature, tms = feature_tms
+            _, tms = feature_tms
 
             if isinstance(tms, CategoricalTransformer):
                 self.categorical_features.append(feature_tms)
@@ -169,16 +168,16 @@ class DatasetTransformer():
         numerical_index = 0
         categorical_index = 0
         
-        for feature_tms in self.categorical_features:
-            feature, tms = feature_tms
+        for feature, tms in self.categorical_features:
+            #feature, tms = feature_tms
             _features = tms.feature
             data = np.array([record[_features] for record in features]) 
             
             categorical_features[:,categorical_index] = tms.fit_transform(data)
             categorical_index += 1
                 
-        for feature_tms in self.numerical_features:
-            feature, tms = feature_tms
+        for feature, tms in self.numerical_features:
+            #feature, tms = feature_tms
             _features = tms.feature
             data = np.array([record[_features] for record in features]) 
             
@@ -196,16 +195,16 @@ class DatasetTransformer():
         numerical_index = 0
         categorical_index = 0
         
-        for feature_tms in self.categorical_features:
-            feature, tms = feature_tms
+        for feature, tms in self.categorical_features:
+            #feature, tms = feature_tms
             _features = tms.feature
             data = np.array([record[_features] for record in features]) 
             
             categorical_features[:,categorical_index] = tms.transform(data)
             categorical_index += 1
                 
-        for feature_tms in self.numerical_features:
-            feature, tms = feature_tms
+        for feature, tms in self.numerical_features:
+            #feature, tms = feature_tms
             _features = tms.feature
             data = np.array([record[_features] for record in features]) 
             
@@ -214,10 +213,16 @@ class DatasetTransformer():
 
         return numerical_features, categorical_features
     
-    def get_feature(self, feature:str) -> Tuple[str, TransformerMixin]:
-        for feature_name, feature_tms in self.features_tms:
-            if feature_name == feature:
-                return feature_name, feature_tms
+    def get(self, feature:str) -> Tuple[int, str, TransformerMixin]:
+        for i, feature_tms in enumerate(self.categorical_features):
+            _feature, tms = feature_tms
+            if _feature == feature:
+                return i, feature, tms
+            
+        for i, feature_tms in enumerate(self.numerical_features):
+            _feature, tms = feature_tms
+            if _feature == feature:
+                return i, feature, tms
             
         raise KeyError(f"Feature {feature} doesn't exist")
         
@@ -244,8 +249,20 @@ class DatasetTransformer():
     def loads(obj):
         return pickle.loads(obj)
     
-    def __get_features(self, features:Dict[str, str], keys:Union[str, List[str]], primitive_fill_missing:str=np.nan) -> np.ndarray:
-        if isinstance(keys, str):
-            data = list(map(lambda record: record[keys], features))
-            data = [item.strip() if item.strip() != '' else primitive_fill_missing for item in data]
-            return np.array(data, dtype=object)
+    @staticmethod
+    def delete_features(feature_type:str, features_to_delete:Union[str, List[str]], features:np.ndarray) -> np.ndarray:
+        if dataset_type not in ['numerical', 'categorilca']:
+            raise KeyError(f"FeatureType {feature_type} not allowed")
+            
+        features_to_delete = [features_to_delete] if isinstance(features_to_delete, str) else features_to_delete
+        index_to_delete = []
+            
+        for i, feature_tms in enumerate(getattr(self, f'{feature_type}_features')):
+            feature,_ = feature_tms
+            
+            if feature in features_to_delete:
+                index_to_delete.append(i)
+                
+        return np.delete(features, index_to_delete, 1)
+                
+            

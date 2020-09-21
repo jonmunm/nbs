@@ -56,13 +56,15 @@ class NumericalTransformer(TransformerMixin):
 class CategoricalTransformer(TransformerMixin):
     def __init__(
         self, 
-        feature:str, 
+        feature:str,
+        handle_unknown:bool=False,
         pre_tms:List[FT]=list(), 
         encoder:TransformerMixin=None, 
         post_tms:List[FT]=list()
     ):
         self.feature = feature
         self.pre_tms = pre_tms
+        self.handle_unknown = handle_unknown
 
         if encoder != False:
             if encoder is None:
@@ -80,7 +82,7 @@ class CategoricalTransformer(TransformerMixin):
         for tms in self.pre_tms:
             data = tms.transform(data).astype(np.str)
         
-        self.encoder.fit(np.append(data, ['UNKNOWN']))
+        self.encoder.fit(np.append(data, ['UNKNOWN'] if self.handle_unknown else []))
         data = self.encoder.transform(data) if self.encoder is not None else data
         
         for tms in self.post_tms:
@@ -94,7 +96,8 @@ class CategoricalTransformer(TransformerMixin):
         for tms in self.pre_tms:
             data = tms.transform(data).astype(np.str)
             
-        data = np.array([item if item in self.encoder.classes_ else 'UNKNOWN' for item in data], dtype=object)
+        if self.handle_unknown:
+            data = np.array([item if item in self.encoder.classes_ else 'UNKNOWN' for item in data], dtype=object)
             
         if self.encoder is not None:
             data = self.encoder.transform(data)

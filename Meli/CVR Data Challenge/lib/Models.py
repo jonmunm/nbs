@@ -1,3 +1,4 @@
+from typing import List, Dict, Tuple, Union
 import pickle
 import torch
 import torch.nn as nn
@@ -7,7 +8,13 @@ from torch.optim import Optimizer
 from torch import tensor, Tensor
     
 class FullyConnectedNetworkClassifier(nn.Module):
-    def __init__(self, q_numerical_features:int, q_categorical_features:int, hidden_layers_size:list, embedding_dims:list=None):
+    def __init__(
+        self, 
+        q_numerical_features:int, 
+        q_categorical_features:int, 
+        hidden_layers_size:List[int],
+        embedding_dims:List[Tuple[int, int]]=None,
+    ):
         super(FullyConnectedNetworkClassifier, self).__init__()
         
         self.hidden_layers_size = hidden_layers_size

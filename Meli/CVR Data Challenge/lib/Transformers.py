@@ -7,7 +7,14 @@ from typing import List, Dict, Tuple, Union
 import numpy as np
 
 class NumericalTransformer(TransformerMixin):
-    def __init__(self, feature:str, pre_tms:List[FT]=list(), imputer:TransformerMixin=None, scaler:TransformerMixin=None, post_tms:List[FT]=list()):
+    def __init__(
+        self, 
+        feature:Union[str, List[str]], 
+        pre_tms:List[FT]=list(), 
+        imputer:TransformerMixin=None, 
+        scaler:TransformerMixin=None, 
+        post_tms:List[FT]=list()
+    ):
         self.feature = feature
         self.pre_tms = pre_tms
         
@@ -172,7 +179,6 @@ class DatasetTransformer():
         categorical_index = 0
         
         for feature, tms in self.categorical_features:
-            #feature, tms = feature_tms
             _features = tms.feature
             data = np.array([record[_features] for record in features]) 
             
@@ -180,9 +186,16 @@ class DatasetTransformer():
             categorical_index += 1
                 
         for feature, tms in self.numerical_features:
-            #feature, tms = feature_tms
             _features = tms.feature
-            data = np.array([record[_features] for record in features]) 
+            
+            if isinstance(_features, str):
+                data = np.array([record[_features] for record in features])
+            else:
+                data_list = []
+                for __feature in _features:
+                    data_list.append(np.array([record[__feature] for record in features]))
+                    
+                data = np.vstack(tuple(data_list))
             
             numerical_features[:,numerical_index] = tms.fit_transform(data)
             numerical_index += 1
@@ -199,7 +212,6 @@ class DatasetTransformer():
         categorical_index = 0
         
         for feature, tms in self.categorical_features:
-            #feature, tms = feature_tms
             _features = tms.feature
             data = np.array([record[_features] for record in features]) 
             
@@ -207,9 +219,16 @@ class DatasetTransformer():
             categorical_index += 1
                 
         for feature, tms in self.numerical_features:
-            #feature, tms = feature_tms
             _features = tms.feature
-            data = np.array([record[_features] for record in features]) 
+            
+            if isinstance(_features, str):
+                data = np.array([record[_features] for record in features])
+            else:
+                data_list = []
+                for __feature in _features:
+                    data_list.append(np.array([record[__feature] for record in features]))
+                    
+                data = np.vstack(tuple(data_list))
             
             numerical_features[:,numerical_index] = tms.transform(data)
             numerical_index += 1
@@ -254,7 +273,7 @@ class DatasetTransformer():
     
     @staticmethod
     def delete_features(feature_type:str, features_to_delete:Union[str, List[str]], features:np.ndarray) -> np.ndarray:
-        if dataset_type not in ['numerical', 'categorilca']:
+        if dataset_type not in ['numerical', 'categorical']:
             raise KeyError(f"FeatureType {feature_type} not allowed")
             
         features_to_delete = [features_to_delete] if isinstance(features_to_delete, str) else features_to_delete

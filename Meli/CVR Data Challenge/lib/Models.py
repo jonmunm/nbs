@@ -30,7 +30,7 @@ class FullyConnectedNetworkClassifier(nn.Module):
             self.embeddings_layer = None
         
         self.layer_0 = nn.Sequential(
-            nn.Linear(embedding_sizes + q_numerical_features, hidden_layers_size[0]),
+            nn.Linear(embedding_sizes + q_numerical_features, hidden_layers_size[0], bias=False),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.BatchNorm1d(hidden_layers_size[0]),            
@@ -38,7 +38,7 @@ class FullyConnectedNetworkClassifier(nn.Module):
         
         for i, hidden_size in enumerate(hidden_layers_size[1:]):
             layer = nn.Sequential(
-                nn.Linear(hidden_layers_size[i], hidden_layers_size[i+1]),
+                nn.Linear(hidden_layers_size[i], hidden_layers_size[i+1], bias=False),
                 nn.ReLU(),
                 nn.Dropout(0.3),
                 nn.BatchNorm1d(hidden_layers_size[i+1]),            
@@ -46,8 +46,7 @@ class FullyConnectedNetworkClassifier(nn.Module):
             setattr(self, f'layer_{i+1}', layer)
         
         self.output = nn.Sequential(
-            nn.Linear(hidden_layers_size[-1], 1),
-            nn.Sigmoid()
+            nn.Linear(hidden_layers_size[-1], 2, bias=False)
         )
         
     def forward(self, numerical_features:Tensor, categorical_features:Tensor) -> Tensor:
@@ -62,7 +61,7 @@ class FullyConnectedNetworkClassifier(nn.Module):
         for i in range(1, len(self.hidden_layers_size)):
             x = getattr(self, f'layer_{i}')(x)
         
-        return self.output(x)
+        return torch.reshape(self.output(x), (-1,2))
     
     def fit(self, train_dl:DataLoader, epochs:int, opt:Optimizer, scheduler:any, loss_fn:any) -> list:
         self.train()
@@ -70,6 +69,10 @@ class FullyConnectedNetworkClassifier(nn.Module):
         for i in range(epochs):
             for x_numerical, x_categorical, y in train_dl:
                 y_pred = self.forward(x_numerical, x_categorical)
+                y = torch.squeeze(y)
+                #print(y_pred)
+                #print(y)
+                
                 loss = loss_fn(y_pred, y)
                 losses.append(loss.item())
 
@@ -77,7 +80,7 @@ class FullyConnectedNetworkClassifier(nn.Module):
                 opt.step()
                 opt.zero_grad()
                 
-                scheduler.step()
+            scheduler.step()
         return losses
     
     def predict(self, data_loader:DataLoader) -> Tensor:

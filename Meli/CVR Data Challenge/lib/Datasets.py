@@ -3,17 +3,17 @@ from torch.utils.data import Dataset
 import numpy as np
 
 class TabularDataset(Dataset):
-    def __init__(self, numerical_features:np.ndarray, categorical_features:np.ndarray, y:np.ndarray=None):    
-        self.numerical_features = torch.tensor(numerical_features, dtype=torch.float)
-        self.categorical_features = torch.tensor(categorical_features, dtype=torch.long)
-        self.y = torch.tensor(y, dtype=torch.float) if y is not None else None
+    def __init__(self, X_numerical, X_categorical, Y=None, Y_dtype=None):    
+        self.X_numerical = torch.tensor(X_numerical, dtype=torch.float)
+        self.X_categorical = torch.tensor(X_categorical, dtype=torch.long)
+        self.Y = torch.tensor(Y, dtype=Y_dtype) if Y is not None else None
 
     def __len__(self):
-        return len(self.numerical_features)
+        return len(self.X_numerical)
 
     def __getitem__(self, idx):
-        sample = self.numerical_features[idx], self.categorical_features[idx], self.y[idx] if self.y is not None else np.nan
+        sample = self.X_numerical[idx], self.X_categorical[idx], self.Y[idx] if self.Y is not None else np.nan
         return sample
     
     def reverse_transform(self):
-        return self.numerical_features.numpy(), self.categorical_features.numpy(), self.y.numpy() if self.y is not None else np.nan
+        return self.X_numerical.numpy(), self.X_categorical.numpy(), self.Y.numpy() if self.Y is not None else np.nan

@@ -30,17 +30,19 @@ class NumericalTransformer(TransformerMixin):
             
         self.post_tfms = post_tfms
         
-    def fit_transform(self, data:np.ndarray) -> np.ndarray:        
-        for tms in self.pre_tms:
-            data = tms.transform(data)
+    def fit_transform(self, X):
+        X = np.array(X[self.key], dtype=self.dtype)
         
-        data = self.imputer.fit_transform(np.array(data).reshape(-1,1)).squeeze() if self.imputer is not None else data
-        data = self.scaler.fit_transform(np.array(data).reshape(-1,1)).squeeze() if self.scaler is not None else data
+        for tfm in self.pre_tfms:
+            X = np.array(tfm.transform(X))
         
-        for tms in self.post_tms:
-            data = tms.transform(data)
+        X = self.imputer.fit_transform(X.reshape(-1,1)).squeeze() if self.imputer is not None else X
+        X = self.scaler.fit_transform(X.reshape(-1,1)).squeeze() if self.scaler is not None else X
+        
+        for tfm in self.post_tfms:
+            X = tms.transform(X)
             
-        return data
+        return X
     
     def transform(self, data:np.ndarray) -> np.ndarray:       
         for tms in self.pre_tms:
@@ -50,14 +52,13 @@ class NumericalTransformer(TransformerMixin):
         data = self.scaler.transform(np.array(data).reshape(-1,1)).squeeze() if self.scaler is not None else data
         
         for tms in self.post_tms:
-            data = tms.transform(data)        
+            X = tms.transform(X)        
         
-        return data
+        return X
 
 class CategoricalTransformer(TransformerMixin):
     def __init__(self, key=None, handle_unknown=False, pre_tfms=list(), encoder=None, post_tfms=list()):
         self.key = key
-        print(self.key)
         self.pre_tfms = pre_tfms
         self.handle_unknown = handle_unknown
 
@@ -71,36 +72,39 @@ class CategoricalTransformer(TransformerMixin):
             
         self.post_tfms = post_tfms
         
-    def fit_transform(self, data:np.ndarray) -> np.ndarray:
-        data = np.array([str(item).strip() for item in data], dtype=object)
+    def fit_transform(self, X, Y=None):
+        X = np.array(X[self.key], dtype=np.str)
         
-        for tms in self.pre_tms:
-            data = tms.transform(data).astype(np.str)
+        for tfm in self.pre_tfms:
+            X = np.array(tfm.transform(X))
         
-        self.encoder.fit(np.append(data, ['UNKNOWN'] if self.handle_unknown else []))
-        data = self.encoder.transform(data) if self.encoder is not None else data
+        X = X.astype(np.str)
         
-        for tms in self.post_tms:
-            data = tms.transform(data)     
+        self.encoder.fit(np.append(X, ['UNKNOWN'] if self.handle_unknown else []))
+        X = self.encoder.transform(X) if self.encoder is not None else X
+        
+        for tfm in self.post_tfms:
+            X = tfm.transform(X)     
             
-        return data
+        return X
     
-    def transform(self, data:np.ndarray) -> np.ndarray:      
-        data = np.array([str(item).strip() for item in data], dtype=object)
+    def transform(self, X):      
+        X = np.array(X[self.key], dtype=np.str)
         
-        for tms in self.pre_tms:
-            data = tms.transform(data).astype(np.str)
+        for tfm in self.pre_tfms:
+            X = tfm.transform(X)
             
         if self.handle_unknown:
-            data = np.array([item if item in self.encoder.classes_ else 'UNKNOWN' for item in data], dtype=object)
+            X = np.array([x if x in self.encoder.classes_ else 'UNKNOWN' for x in X])
             
+        X = X.astype(np.str)
         if self.encoder is not None:
-            data = self.encoder.transform(data)
+            X = self.encoder.transform(X)
         
-        for tms in self.post_tms:
-            data = tms.transform(data)     
+        for tfm in self.post_tfms:
+            X = tfm.transform(X)     
             
-        return data
+        return X
     
 class CategoricalTargetTransformer(TransformerMixin):
     def __init__(self, target:str):
@@ -150,28 +154,16 @@ class DatasetTransformer():
         numerical_index = 0
         categorical_index = 0
         
-        for feature, tms in self.X_categorical:
-            _features = tms.feature
-            data = np.array([record[_features] for record in features]) 
-            
-            categorical_features[:,categorical_index] = tms.fit_transform(data)
+        for tfm in self.X_categorical:
+            categorical_features[:,categorical_index] = tfm.fit_transform(X)
             categorical_index += 1
-                
-        for feature, tms in self.X_numerical:
-            _features = tms.feature
             
-            if isinstance(_features, str):
-                data = np.array([record[_features] for record in features])
-            else:
-                data_list = []
-                for __feature in _features:
-                    data_list.append(np.array([record[__feature] for record in features]))
-                    
-                data = np.vstack(tuple(data_list))
-            
-            numerical_features[:,numerical_index] = tms.fit_transform(data)
+        #print(categorical_features)
+               
+        for tfm in self.X_numerical:
+            numerical_features[:,numerical_index] = tfm.fit_transform(X)
             numerical_index += 1
-                
+               
         return numerical_features, categorical_features
     
     def transform(self, features:List[Dict[str, any]]) -> np.ndarray:

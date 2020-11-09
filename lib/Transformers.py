@@ -98,9 +98,11 @@ class CategoricalFeature(TransformerMixin):
             
         if self.encoder is not None:
             unique_values = np.unique(data)
-            for value in unique_values:
-                if value not in self.encoder.classes_:
-                    self.encoder.classes_ = np.append(self.encoder.classes_, value)
+            diff = np.setdiff1d(unique_values, self.encoder.classes_, True)
+            self.encoder.classes_ = np.append(self.encoder.classes_, diff)
+            #for value in unique_values:
+            #    if value not in self.encoder.classes_:
+            #        self.encoder.classes_ = np.append(self.encoder.classes_, value)
             
             data = self.encoder.transform(data)
         

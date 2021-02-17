@@ -46,7 +46,7 @@ class Runner:
                 validation_predictions = self.predict(validation_data_loader, return_numpy=False)
                 validation_loss = self.loss_fn(validation_predictions, validation_data_loader.dataset.Y).item()
 
-                roc_auc = roc_auc_score(train_data_loader.dataset.Y.numpy(), train_predictions.numpy())
+                roc_auc = roc_auc_score(validation_data_loader.dataset.Y.numpy(), validation_predictions.numpy())
 
                 stats.append({
                     'epoch' : i+1,
